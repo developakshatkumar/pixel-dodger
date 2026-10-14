@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Dodger</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d1a; color: #e8ecff; font-family: ui-monospace, Menlo, monospace; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  canvas { background: #11142a; border: 2px solid #3a4080; image-rendering: pixelated; max-width: 96vw; max-height: 80vh; touch-action: none; }
+  p { margin: 0; font-size: 13px; opacity: .7; }
+</style>
+</head>
+<body>
+<canvas id="c" width="400" height="600"></canvas>
+<p>Arrow keys / A D / mouse or touch to move · Space to start or restart</p>
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+let best = 0;
+try { best = +localStorage.getItem('pixelDodgerBest') || 0; } catch (e) {}
+
+const player = { x: W / 2 - 14, y: H - 50, w: 28, h: 28, speed: 6 };
+let blocks, score, state, spawnTimer, frame, keys = {}, targetX = null;
+
+function reset() {
+  blocks = []; score = 0; spawnTimer = 0; frame = 0;
+  player.x = W / 2 - player.w / 2; targetX = null;
+}
+
+function setPointer(e) {
+  const r = cv.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  targetX = (t.clientX - r.left) * (W / r.width) - player.w / 2;
+}
+cv.addEventListener('mousemove', setPointer);
+cv.addEventListener('touchstart', e => { e.preventDefault(); setPointer(e); if (state !== 'play') start(); }, { passive: false });
+cv.addEventListener('touchmove', e => { e.preventDefault(); setPointer(e); }, { passive: false });
+cv.addEventListener('click', () => { if (state !== 'play') start(); });
+
+addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  targetX = null;
+  if (e.code === 'Space') { e.preventDefault(); if (state !== 'play') start(); }
+  if (e.key.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+function start() { reset(); state = 'play'; }
+
+function update() {
+  frame++;
+  if (keys['arrowleft'] || keys['a']) player.x -= player.speed;
+  if (keys['arrowright'] || keys['d']) player.x += player.speed;
+  if (targetX !== null) player.x += Math.max(-player.speed * 1.5, Math.min(player.speed * 1.5, targetX - player.x));
+  player.x = Math.max(0, Math.min(W - player.w, player.x));
+
+  const difficulty = 1 + frame / 900;
+  spawnTimer--;
+  if (spawnTimer <= 0) {
+    const size = 16 + Math.random() * 30;
+    blocks.push({ x: Math.random() * (W - size), y: -size, w: size, h: size,
+                  vy: (2 + Math.random() * 2) * difficulty, hue: Math.random() * 60 + 300 });
+    spawnTimer = Math.max(8, 38 / difficulty);
+  }
+  for (const b of blocks) b.y += b.vy;
+  blocks = blocks.filter(b => b.y < H);
+
+  for (const b of blocks) {
+    if (player.x < b.x + b.w && player.x + player.w > b.x &&
+        player.y < b.y + b.h && player.y + player.h > b.y) {
+      state = 'over';
+      if (score > best) { best = score; try { localStorage.setItem('pixelDodgerBest', best); } catch (e) {} }
+    }
+  }
+  score = Math.floor(frame / 6);
+}
+
+function text(s, y, size, alpha = 1) {
+  ctx.globalAlpha = alpha; ctx.fillStyle = '#e8ecff';
+  ctx.font = `bold ${size}px ui-monospace, Menlo, monospace`;
+  ctx.textAlign = 'center'; ctx.fillText(s, W / 2, y); ctx.globalAlpha = 1;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  for (const b of blocks) { ctx.fillStyle = `hsl(${b.hue} 80% 60%)`; ctx.fillRect(b.x, b.y, b.w, b.h); }
+  ctx.fillStyle = '#5cf2c0'; ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.fillStyle = '#0b0d1a'; ctx.fillRect(player.x + 6, player.y + 8, 5, 5); ctx.fillRect(player.x + 17, player.y + 8, 5, 5);
+
+  ctx.textAlign = 'left'; ctx.fillStyle = '#e8ecff'; ctx.font = '14px ui-monospace, Menlo, monospace';
+  ctx.fillText('Score ' + score, 10, 22);
+  ctx.textAlign = 'right'; ctx.fillText('Best ' + best, W - 10, 22);
+
+  if (state === 'title') { text('PIXEL DODGER', 250, 32); text('Press Space or tap to start', 290, 14, .8); }
+  if (state === 'over') { text('GAME OVER', 250, 34); text('Score ' + score, 285, 18); text('Space to retry', 320, 14, .8); }
+}
+
+function loop() {
+  if (state === 'play') update();
+  draw();
+  requestAnimationFrame(loop);
+}
+reset(); state = 'title'; loop();
+</script>
+</body>
+</html>
