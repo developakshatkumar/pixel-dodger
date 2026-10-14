@@ -65,6 +65,7 @@ function update() {
   }
   for (const b of blocks) b.y += b.vy;
   blocks = blocks.filter(b => b.y < H);
+  score = Math.floor(frame / 6);
 
   for (const b of blocks) {
     if (player.x < b.x + b.w && player.x + player.w > b.x &&
@@ -73,7 +74,6 @@ function update() {
       if (score > best) { best = score; try { localStorage.setItem('pixelDodgerBest', best); } catch (e) {} }
     }
   }
-  score = Math.floor(frame / 6);
 }
 
 function text(s, y, size, alpha = 1) {
